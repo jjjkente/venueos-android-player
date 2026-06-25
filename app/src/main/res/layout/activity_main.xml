@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#182620">
+    android:background="#0e0e11">
 
     <!-- Pairing screen shown until admin assigns this display to a venue -->
     <LinearLayout
@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:background="#182620"
+        android:background="#0e0e11"
         android:padding="48dp"
         android:visibility="visible">
 
@@ -24,17 +24,17 @@
             android:adjustViewBounds="true"
             android:layout_marginBottom="20dp"/>
 
-        <!-- Green accent divider -->
+        <!-- Cyan accent divider -->
         <View
             android:layout_width="48dp"
             android:layout_height="2dp"
-            android:background="#6fd98c"
+            android:background="#2dcbff"
             android:layout_marginBottom="20dp"/>
 
         <!-- App name -->
         <TextView
             android:text="VenueOS Player"
-            android:textColor="#f0dfa0"
+            android:textColor="#f2f2f5"
             android:textSize="22sp"
             android:textStyle="bold"
             android:letterSpacing="0.04"
@@ -45,7 +45,7 @@
         <!-- Pairing code label -->
         <TextView
             android:text="PAIRING CODE"
-            android:textColor="#6c7d72"
+            android:textColor="#9a9aa3"
             android:textSize="11sp"
             android:letterSpacing="0.12"
             android:layout_width="wrap_content"
@@ -66,7 +66,7 @@
             <TextView
                 android:id="@+id/pairing_code"
                 android:text="———"
-                android:textColor="#f0dfa0"
+                android:textColor="#2dcbff"
                 android:textSize="64sp"
                 android:textStyle="bold"
                 android:fontFamily="monospace"
@@ -78,7 +78,7 @@
         <!-- Instructions -->
         <TextView
             android:text="Visit admin.venueos.jjjk.com.au"
-            android:textColor="#9bab9f"
+            android:textColor="#c8c8d4"
             android:textSize="14sp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -86,7 +86,7 @@
 
         <TextView
             android:text="go to Players and assign this display to a venue"
-            android:textColor="#6c7d72"
+            android:textColor="#9a9aa3"
             android:textSize="13sp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
