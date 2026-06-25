@@ -111,6 +111,8 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
                     os.write(jpeg)
                     os.write("\r\n--$boundary--\r\n".toByteArray())
                 }
+                val code = conn.responseCode
+                android.util.Log.d("VenueOSMain", "Screenshot upload: $code")
                 conn.disconnect()
             } catch (e: Exception) {
                 android.util.Log.e("VenueOSMain", "Screenshot upload failed: ${e.message}")
