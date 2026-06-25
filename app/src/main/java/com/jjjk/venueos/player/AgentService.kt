@@ -125,7 +125,7 @@ class AgentService : Service() {
                 put("name", "Android Player (${Build.MODEL})")
             }.toString()
             val resp = httpPost("$venueUrl/signage/api/screens/register", body)
-            JSONObject(resp).optString("id").takeIf { it.isNotEmpty() }
+            JSONObject(resp).optString("screenId").takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
             Log.e(TAG, "Screen register failed: ${e.message}")
             null
