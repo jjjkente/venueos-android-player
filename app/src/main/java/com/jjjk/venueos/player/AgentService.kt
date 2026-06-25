@@ -16,7 +16,7 @@ class AgentService : Service() {
 
     companion object {
         const val TAG = "VenueOSAgent"
-        const val APP_VERSION = "1.0.0"
+        val APP_VERSION: String get() = BuildConfig.VERSION_NAME
         const val PROVISION_BASE = "https://admin.venueos.jjjk.com.au"
         const val NOTIF_CHANNEL = "venueos_agent"
         const val NOTIF_ID = 1
