@@ -1,0 +1,62 @@
+name: Build VenueOS Player APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Generate launcher icons
+        run: |
+          python3 - <<'EOF'
+          import struct, zlib, os
+
+          def make_png(w, h, r, g, b):
+              def chunk(tag, data):
+                  c = tag + data
+                  return struct.pack('>I', len(data)) + c + struct.pack('>I', zlib.crc32(c) & 0xffffffff)
+              rows = b''.join(b'\x00' + bytes([r, g, b] * w) for _ in range(h))
+              return (b'\x89PNG\r\n\x1a\n'
+                      + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+                      + chunk(b'IDAT', zlib.compress(rows))
+                      + chunk(b'IEND', b''))
+
+          densities = {'mipmap-mdpi': 48, 'mipmap-hdpi': 72, 'mipmap-xhdpi': 96,
+                       'mipmap-xxhdpi': 144, 'mipmap-xxxhdpi': 192}
+          for d, size in densities.items():
+              path = f'app/src/main/res/{d}'
+              os.makedirs(path, exist_ok=True)
+              png = make_png(size, size, 0x18, 0x26, 0x20)
+              open(f'{path}/ic_launcher.png', 'wb').write(png)
+              open(f'{path}/ic_launcher_round.png', 'wb').write(png)
+          print('Icons generated')
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        run: gradle assembleDebug
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: venueos-player-${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

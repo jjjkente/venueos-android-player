@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0f1713">
+
+    <!-- Pairing screen shown until admin assigns this display to a venue -->
+    <LinearLayout
+        android:id="@+id/pairing_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#0f1713"
+        android:visibility="visible">
+
+        <TextView
+            android:text="VenueOS"
+            android:textColor="#f0dfa0"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"/>
+
+        <TextView
+            android:text="Digital Signage Player"
+            android:textColor="#9bab9f"
+            android:textSize="16sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="56dp"/>
+
+        <TextView
+            android:text="PAIRING CODE"
+            android:textColor="#6c7d72"
+            android:textSize="11sp"
+            android:letterSpacing="0.12"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"/>
+
+        <TextView
+            android:id="@+id/pairing_code"
+            android:text="———"
+            android:textColor="#f0dfa0"
+            android:textSize="72sp"
+            android:textStyle="bold"
+            android:fontFamily="monospace"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="40dp"/>
+
+        <TextView
+            android:text="Go to admin.venueos.jjjk.com.au → Players"
+            android:textColor="#9bab9f"
+            android:textSize="15sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:text="and assign this display to a venue"
+            android:textColor="#9bab9f"
+            android:textSize="15sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+
+    <!-- Fullscreen WebView shown once display is assigned and running -->
+    <FrameLayout
+        android:id="@+id/webview_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone">
+
+        <WebView
+            android:id="@+id/webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+    </FrameLayout>
+
+</FrameLayout>
