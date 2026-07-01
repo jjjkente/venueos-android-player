@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.*
+import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONObject
@@ -207,7 +208,9 @@ class AgentService : Service() {
     private fun getOrCreateDeviceId(): String {
         var id = prefs.getString(PREF_DEVICE_ID, null)
         if (id == null) {
-            id = UUID.randomUUID().toString()
+            // ANDROID_ID survives app data clears; only changes on factory reset (intentional new registration)
+            id = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                ?: UUID.randomUUID().toString()
             prefs.edit().putString(PREF_DEVICE_ID, id).apply()
         }
         return id
