@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
+import java.net.NetworkInterface
 import java.net.URL
 import java.util.UUID
 
@@ -77,6 +78,7 @@ class AgentService : Service() {
 
     private fun provisionLoop() {
         val deviceId = getOrCreateDeviceId()
+        val hardwareId = getHardwareId()
         while (true) {
             try {
                 val body = JSONObject().apply {
@@ -84,6 +86,7 @@ class AgentService : Service() {
                     put("model", Build.MODEL)
                     put("androidVersion", Build.VERSION.RELEASE)
                     put("appVersion", APP_VERSION)
+                    if (hardwareId != null) put("hardwareId", hardwareId)
                 }.toString()
                 val resp = httpPost("$PROVISION_BASE/api/players/register", body)
                 val code = JSONObject(resp).getString("pairingCode")
@@ -104,7 +107,16 @@ class AgentService : Service() {
                 val json = JSONObject(resp)
                 if (json.optBoolean("assigned")) {
                     val venueUrl = json.getString("venueUrl")
-                    val screenId = registerScreen(venueUrl, deviceId) ?: continue
+                    // A known hardwareId lets the server hand back the screen this
+                    // device was already paired as, so a nightly storage wipe on
+                    // flaky panel firmware silently reconnects instead of minting
+                    // a fresh unclaimed pairing code every reboot.
+                    val knownScreenId = json.optString("screenId", "").takeIf { it.isNotEmpty() }
+                    val screenId = knownScreenId ?: run {
+                        val newScreenId = registerScreen(venueUrl, deviceId) ?: return@run null
+                        reportScreenId(deviceId, newScreenId)
+                        newScreenId
+                    } ?: continue
                     prefs.edit()
                         .putString(PREF_VENUE_URL, venueUrl)
                         .putString(PREF_SCREEN_ID, screenId)
@@ -117,6 +129,16 @@ class AgentService : Service() {
                 Log.w(TAG, "Poll error: ${e.message}")
             }
             Thread.sleep(5_000)
+        }
+    }
+
+    private fun reportScreenId(deviceId: String, screenId: String) {
+        try {
+            httpPost("$PROVISION_BASE/api/players/$deviceId/screen", JSONObject().apply {
+                put("screenId", screenId)
+            }.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "Report screenId failed: ${e.message}")
         }
     }
 
@@ -214,6 +236,21 @@ class AgentService : Service() {
             prefs.edit().putString(PREF_DEVICE_ID, id).apply()
         }
         return id
+    }
+
+    // Ethernet MAC baked into the NIC survives even a full Android data wipe,
+    // unlike ANDROID_ID/SharedPreferences which some panel firmware resets on
+    // every unclean power cycle. Best-effort only — null if no wired NIC exposes one.
+    private fun getHardwareId(): String? = try {
+        NetworkInterface.getNetworkInterfaces().asSequence()
+            .filter { !it.isLoopback && it.hardwareAddress != null }
+            .sortedByDescending { it.name.startsWith("eth") }
+            .firstOrNull()
+            ?.hardwareAddress
+            ?.joinToString(":") { String.format("%02X", it) }
+    } catch (e: Exception) {
+        Log.w(TAG, "getHardwareId failed: ${e.message}")
+        null
     }
 
     private fun httpGet(url: String): String {
