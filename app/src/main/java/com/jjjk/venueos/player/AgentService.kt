@@ -295,7 +295,11 @@ class AgentService : Service() {
             .build()
 
     private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java)
+        // getSystemService(Class<T>) is API 23+ only; this app's minSdk is 21
+        // (real hardware: a Philips/TPV panel on Android 5.0.1 hit this exact
+        // NoSuchMethodError, crashing the whole process right after the pairing
+        // code first showed). Use the string-constant overload, valid since API 1.
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIF_ID, buildNotification(text))
     }
 }
