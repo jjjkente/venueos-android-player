@@ -111,7 +111,12 @@ class AgentService : Service() {
                     // device was already paired as, so a nightly storage wipe on
                     // flaky panel firmware silently reconnects instead of minting
                     // a fresh unclaimed pairing code every reboot.
-                    val knownScreenId = json.optString("screenId", "").takeIf { it.isNotEmpty() }
+                    // org.json's JSONObject.NULL has a toString() override that
+                    // returns the literal string "null", so optString(key, "")
+                    // does NOT fall back to "" when the key is present-but-null,
+                    // only when the key is absent entirely - has()+isNull() is
+                    // the only reliable way to tell "no screenId" from "null".
+                    val knownScreenId = if (json.has("screenId") && !json.isNull("screenId")) json.getString("screenId") else null
                     val screenId = knownScreenId ?: run {
                         val newScreenId = registerScreen(venueUrl, deviceId) ?: return@run null
                         reportScreenId(deviceId, newScreenId)
@@ -148,7 +153,8 @@ class AgentService : Service() {
                 put("name", "Android Player (${Build.MODEL})")
             }.toString()
             val resp = httpPost("$venueUrl/signage/api/screens/register", body)
-            JSONObject(resp).optString("screenId").takeIf { it.isNotEmpty() }
+            val obj = JSONObject(resp)
+            if (obj.has("screenId") && !obj.isNull("screenId")) obj.getString("screenId") else null
         } catch (e: Exception) {
             Log.e(TAG, "Screen register failed: ${e.message}")
             null
