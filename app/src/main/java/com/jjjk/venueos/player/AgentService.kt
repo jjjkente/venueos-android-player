@@ -59,6 +59,15 @@ class AgentService : Service() {
         } else {
             startForeground(NOTIF_ID, notif)
         }
+        // Only relevant on a cold boot launch (BootReceiver) - if MainActivity
+        // is what actually started this service (normal foreground use) it's
+        // already on screen, so this is a harmless no-op re-launch of the
+        // same activity. See BootReceiver for why this lives here and not there.
+        if (BuildConfig.AUTO_LAUNCH_ON_BOOT) {
+            val launch = Intent(this, MainActivity::class.java)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(launch)
+        }
         Thread { start() }.start()
         return START_STICKY
     }
