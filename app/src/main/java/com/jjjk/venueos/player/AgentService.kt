@@ -9,10 +9,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.NetworkInterface
 import java.net.URL
 import java.util.UUID
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class AgentService : Service() {
 
@@ -43,6 +48,18 @@ class AgentService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var prefs: SharedPreferences
     private var running = false
+
+    // HttpURLConnection's connectTimeout/readTimeout don't reliably bound DNS
+    // resolution on Android - a lookup that hangs at the native getaddrinfo()
+    // level (seen for real: right as wifi finishes negotiating on boot, one
+    // attempt failed fast with "no address associated", the next just hung
+    // forever with zero further log output) can block a plain network call
+    // indefinitely with no timeout ever firing. Running each call on this
+    // executor with an explicit Future.get(timeout) means a wedged attempt
+    // just gets abandoned (its thread may leak until the OS eventually kills
+    // the hung native call, but nothing here waits on it) instead of
+    // permanently freezing the registration/poll/command retry loops.
+    private val networkExecutor = Executors.newCachedThreadPool()
 
     override fun onCreate() {
         super.onCreate()
@@ -296,18 +313,31 @@ class AgentService : Service() {
         null
     }
 
-    private fun httpGet(url: String): String {
+    // Wraps the actual blocking work in a hard 20s deadline - see
+    // networkExecutor's comment above for why connectTimeout/readTimeout
+    // alone aren't enough (they don't reliably bound DNS resolution).
+    private fun <T> withTimeout(timeoutSec: Long = 20, block: () -> T): T {
+        val future = networkExecutor.submit(Callable { block() })
+        return try {
+            future.get(timeoutSec, TimeUnit.SECONDS)
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            throw IOException("Request timed out after ${timeoutSec}s")
+        }
+    }
+
+    private fun httpGet(url: String): String = withTimeout {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 15_000
-        return try {
+        try {
             conn.inputStream.bufferedReader().readText()
         } finally {
             conn.disconnect()
         }
     }
 
-    private fun httpPost(url: String, body: String): String {
+    private fun httpPost(url: String, body: String): String = withTimeout {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
@@ -315,7 +345,7 @@ class AgentService : Service() {
         conn.readTimeout = 15_000
         conn.doOutput = true
         conn.outputStream.write(body.toByteArray())
-        return try {
+        try {
             conn.inputStream.bufferedReader().readText()
         } finally {
             conn.disconnect()
