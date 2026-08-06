@@ -19,6 +19,18 @@ android {
         buildConfig = true
     }
 
+    flavorDimensions += "launch"
+    productFlavors {
+        create("standard") {
+            dimension = "launch"
+            buildConfigField("boolean", "AUTO_LAUNCH_ON_BOOT", "false")
+        }
+        create("autolaunch") {
+            dimension = "launch"
+            buildConfigField("boolean", "AUTO_LAUNCH_ON_BOOT", "true")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
