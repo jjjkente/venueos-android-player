@@ -14,6 +14,10 @@ class BootReceiver : BroadcastReceiver() {
             } else {
                 context.startService(svc)
             }
+
+            val launch = Intent(context, MainActivity::class.java)
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(launch)
         }
     }
 }
