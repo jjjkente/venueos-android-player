@@ -111,6 +111,17 @@ class AgentService : Service() {
                     // device was already paired as, so a nightly storage wipe on
                     // flaky panel firmware silently reconnects instead of minting
                     // a fresh unclaimed pairing code every reboot.
+                    //
+                    // This same knownScreenId branch is also what collapses the
+                    // whole flow to a single on-screen code as of the venue-side
+                    // "Claim a New Device" UI (2026-08-06): that path claims the
+                    // screen and sets screenId on the player record in one atomic
+                    // step server-side, so it's already present here and
+                    // registerScreen() below never runs a second registration -
+                    // no second pairing code is ever shown. The old superadmin
+                    // "Assign to Venue" action only sets venueUrl (not screenId),
+                    // so it still falls through to registerScreen() below and a
+                    // second code, kept as a working fallback path deliberately.
                     // org.json's JSONObject.NULL has a toString() override that
                     // returns the literal string "null", so optString(key, "")
                     // does NOT fall back to "" when the key is present-but-null,
@@ -189,6 +200,7 @@ class AgentService : Service() {
                 val value = cmd.optString("value", "normal")
                 mainHandler.post { listener?.onRotate(value) }
             }
+            "resolution" -> applyResolution(cmd.optString("value", ""))
             "screenshot" -> {
                 val uploadUrl = "$signageBase/api/screens/$screenId/screenshot"
                 mainHandler.post { listener?.onTakeScreenshot(uploadUrl) }
@@ -196,6 +208,22 @@ class AgentService : Service() {
             "reboot" -> doReboot()
             "check-update" -> Log.i(TAG, "check-update received (Android APK updates via sideload)")
             else -> Log.w(TAG, "Unknown command: $type")
+        }
+    }
+
+    // Android equivalent of the Pi agent's apply_resolution() gtf/xrandr
+    // modeline synthesis - `wm size` is WindowManager's own supported
+    // override for a non-EDID-advertised panel (e.g. an LED wall processor),
+    // so no manual mode synthesis is needed here, just root shell access
+    // (same su binary already used for the boot animation on this hardware).
+    // Empty value ("") is what the dashboard sends to clear back to native -
+    // `wm size reset` is the documented way to do that.
+    private fun applyResolution(value: String) {
+        val arg = if (value.isBlank()) "reset" else value
+        try {
+            Runtime.getRuntime().exec(arrayOf("su", "0", "wm", "size", arg)).waitFor()
+        } catch (e: Exception) {
+            Log.w(TAG, "wm size failed (device may not be rooted): ${e.message}")
         }
     }
 
