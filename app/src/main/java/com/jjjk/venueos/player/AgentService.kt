@@ -92,6 +92,7 @@ class AgentService : Service() {
     override fun onBind(intent: Intent?) = null
 
     private fun start() {
+        reportDeviceInfo()
         val venueUrl = prefs.getString(PREF_VENUE_URL, null)
         val screenId = prefs.getString(PREF_SCREEN_ID, null)
         if (venueUrl != null && screenId != null) {
@@ -100,6 +101,28 @@ class AgentService : Service() {
         } else {
             provisionLoop()
         }
+    }
+
+    // Best-effort, fire-and-forget report of the OS build fingerprint + signing keys
+    // (Build.TAGS is "release-keys" on a proper signed manufacturer build, "test-keys"
+    // /"dev-keys" otherwise) so admin.venueos.jjjk.com.au can flag panels running a
+    // non-release-signed or unofficially-built firmware image. Called unconditionally
+    // on every start() - register() only fires for a still-unpaired device, but this
+    // is the one thing already-assigned panels need to report too, since after
+    // pairing they never talk to PROVISION_BASE again (everything else goes to the
+    // venue's own signage server).
+    private fun reportDeviceInfo() {
+        Thread {
+            try {
+                val deviceId = getOrCreateDeviceId()
+                httpPost("$PROVISION_BASE/api/players/$deviceId/info", JSONObject().apply {
+                    put("fingerprint", Build.FINGERPRINT)
+                    put("buildTags", Build.TAGS)
+                }.toString())
+            } catch (e: Exception) {
+                Log.w(TAG, "reportDeviceInfo failed: ${e.message}")
+            }
+        }.start()
     }
 
     private fun provisionLoop() {
@@ -112,6 +135,8 @@ class AgentService : Service() {
                     put("model", Build.MODEL)
                     put("androidVersion", Build.VERSION.RELEASE)
                     put("appVersion", APP_VERSION)
+                    put("fingerprint", Build.FINGERPRINT)
+                    put("buildTags", Build.TAGS)
                     if (hardwareId != null) put("hardwareId", hardwareId)
                 }.toString()
                 val resp = httpPost("$PROVISION_BASE/api/players/register", body)
