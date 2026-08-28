@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.*
@@ -19,6 +21,34 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
     private lateinit var webViewContainer: View
     private lateinit var webView: WebView
     private lateinit var pairingCodeText: TextView
+
+    // Kiosk escape hatch: 7 taps in the top-left 80dp corner within 3s
+    // opens real Android Settings, bypassing immersive/back-button lockdown.
+    // Without this, a bad build or an OEM launcher fight can strand a
+    // field installer with no way back into the device at all.
+    private var escapeTapCount = 0
+    private var escapeTapWindowStart = 0L
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.action == MotionEvent.ACTION_DOWN) {
+            val density = resources.displayMetrics.density
+            val cornerPx = 80 * density
+            if (ev.rawX <= cornerPx && ev.rawY <= cornerPx) {
+                val now = System.currentTimeMillis()
+                if (now - escapeTapWindowStart > 3000) {
+                    escapeTapCount = 0
+                    escapeTapWindowStart = now
+                }
+                escapeTapCount++
+                if (escapeTapCount >= 7) {
+                    escapeTapCount = 0
+                    window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+                    startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
