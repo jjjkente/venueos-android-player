@@ -28,15 +28,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
-            <!-- Without this, Android has no "set as Home" option for this app at all -
-                 it stays a normal launcher icon, and whatever app IS registered as Home
-                 (e.g. a pre-existing signage app like Fusion) keeps reasserting itself
-                 any time the device returns to an idle/home state. -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.HOME"/>
-                <category android:name="android.intent.category.DEFAULT"/>
-            </intent-filter>
+            <!-- Deliberately NOT registered for category.HOME. Committing to
+                 "Always" on the Home resolver combined with immersive kiosk
+                 mode (no nav bar, back button blocked) made a bad build or a
+                 fighting OEM launcher an unrecoverable lockout in the field
+                 (Angelsea, 2026-08-28). Boot auto-launch doesn't need Home
+                 status - AgentService starts MainActivity explicitly by
+                 component name once its foreground service is up (see
+                 AgentService.onStartCommand) - so this trades "survives an
+                 idle/Home-button return without the OEM launcher flashing
+                 back up" for "can never be fully locked out." -->
         </activity>
 
         <service
