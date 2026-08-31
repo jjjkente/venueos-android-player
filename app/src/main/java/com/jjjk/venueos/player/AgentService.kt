@@ -11,8 +11,10 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.net.URL
+import java.net.URLEncoder
 import java.util.UUID
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
@@ -233,7 +235,14 @@ class AgentService : Service() {
         val base = "$venueUrl/signage"
         while (true) {
             try {
-                val resp = httpGet("$base/api/screens/$screenId/agent-status?agentVersion=$APP_VERSION&platform=android")
+                // Re-read every loop, not once at start - the LAN IP can change if
+                // the panel hops networks or DHCP re-leases without ever rebooting.
+                // WAN IP is deliberately not sent - the signage server captures that
+                // itself from X-Forwarded-For, same as the Pi agent's approach.
+                val qs = "agentVersion=$APP_VERSION&platform=android" +
+                    "&lanIp=${enc(getLanIp())}&tailscaleIp=${enc(getTailscaleIp())}" +
+                    "&macAddress=${enc(getHardwareId())}&osVersion=${enc(Build.VERSION.RELEASE)}"
+                val resp = httpGet("$base/api/screens/$screenId/agent-status?$qs")
                 val json = JSONObject(resp)
                 val cmd = json.optJSONObject("pendingCommand") ?: json.optJSONObject("command")
                 if (cmd != null) handleCommand(cmd, base, screenId)
@@ -242,6 +251,32 @@ class AgentService : Service() {
             }
             Thread.sleep(10_000)
         }
+    }
+
+    private fun enc(value: String?): String = URLEncoder.encode(value ?: "", "UTF-8")
+
+    // Prefers eth0/wired over WiFi, same priority as getHardwareId() below -
+    // best-effort only, null if no interface currently has an IPv4 address.
+    private fun getLanIp(): String? = try {
+        NetworkInterface.getNetworkInterfaces().asSequence()
+            .filter { !it.isLoopback && it.isUp && !it.name.startsWith("tailscale") }
+            .sortedByDescending { it.name.startsWith("eth") }
+            .flatMap { iface -> iface.inetAddresses.asSequence().filterIsInstance<Inet4Address>() }
+            .firstOrNull()
+            ?.hostAddress
+    } catch (e: Exception) {
+        Log.w(TAG, "getLanIp failed: ${e.message}")
+        null
+    }
+
+    // Not expected on most Android signage panels (Tailscale isn't installed
+    // on this fleet today) - returns null harmlessly unless a future device
+    // has it, matching how the column already behaves for Pi players without it.
+    private fun getTailscaleIp(): String? = try {
+        NetworkInterface.getByName("tailscale0")?.inetAddresses?.asSequence()
+            ?.filterIsInstance<Inet4Address>()?.firstOrNull()?.hostAddress
+    } catch (e: Exception) {
+        null
     }
 
     private fun handleCommand(cmd: JSONObject, signageBase: String, screenId: String) {
