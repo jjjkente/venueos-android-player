@@ -11,12 +11,29 @@ android {
         applicationId = "com.jjjk.venueos.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
     }
 
     buildFeatures {
         buildConfig = true
+    }
+
+    // Pin every debug build to the keystore committed in the repo root,
+    // instead of each machine/CI runner's own auto-generated
+    // ~/.android/debug.keystore. Without this, a build from a fresh GitHub
+    // Actions runner is signed with a different random key every time,
+    // which Android's package manager treats as a different app entirely -
+    // any update install then fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE
+    // and needs a full uninstall (losing pairing/venue state) instead of a
+    // normal in-place update.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     flavorDimensions += "launch"
