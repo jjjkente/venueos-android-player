@@ -42,6 +42,11 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
                 escapeTapCount++
                 if (escapeTapCount >= 7) {
                     escapeTapCount = 0
+                    // Screen pinning blocks launching another app's activity
+                    // while engaged, so the escape hatch has to release it
+                    // first - otherwise this whole safety valve silently
+                    // does nothing at exactly the moment it's needed.
+                    releaseLockTask()
                     window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
                     startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
@@ -105,6 +110,11 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
         webView.loadUrl(url)
         webViewContainer.visibility = View.VISIBLE
         pairingView.visibility = View.GONE
+        // Only pin once the display is actually live, not during pairing -
+        // staff need normal navigation if a screen won't pair (e.g. to open
+        // WiFi settings), and the escape hatch already covers getting out
+        // once it's running.
+        engageLockTask()
     }
 
     override fun onRefresh() {
@@ -181,6 +191,29 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
         )
+    }
+
+    // Screen pinning (Android's own "lock task mode") - self-initiated, so
+    // it works on any device without needing Device Owner/MDM provisioning.
+    // Deliberately NOT paired with becoming the Home app (see the manifest
+    // comment on why) - that combination is what actually stranded a field
+    // install once already. Pinning still leaves Android's own unpin
+    // gesture (hold Back + Recents) live underneath, independent of
+    // anything this app's code does, on top of the 7-tap escape hatch.
+    private fun engageLockTask() {
+        try {
+            startLockTask()
+        } catch (e: Exception) {
+            android.util.Log.w("VenueOSMain", "startLockTask failed: ${e.message}")
+        }
+    }
+
+    private fun releaseLockTask() {
+        try {
+            stopLockTask()
+        } catch (e: Exception) {
+            // Not currently pinned - nothing to release.
+        }
     }
 
     private fun startAgentService() {
