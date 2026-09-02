@@ -2,6 +2,7 @@ package com.jjjk.venueos.player
 
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
@@ -201,6 +202,16 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
     // gesture (hold Back + Recents) live underneath, independent of
     // anything this app's code does, on top of the 7-tap escape hatch.
     private fun engageLockTask() {
+        // This same APK also runs on Philips commercial displays with no
+        // touch input at all - the 7-tap escape hatch above and Android's
+        // own hold-Back+Recents unpin gesture both need touch, so pinning a
+        // touch-less device would leave literally no way back in short of
+        // pulling power and hoping. Only self-pin where an escape route can
+        // actually be used.
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)) {
+            android.util.Log.i("VenueOSMain", "No touchscreen - skipping screen pinning")
+            return
+        }
         try {
             startLockTask()
         } catch (e: Exception) {
