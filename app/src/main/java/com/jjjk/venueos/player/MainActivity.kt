@@ -7,8 +7,10 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.provider.Settings
 import android.view.MotionEvent
+import android.view.PixelCopy
 import android.view.View
 import android.view.WindowManager
 import android.webkit.*
@@ -133,8 +135,36 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
 
     override fun onTakeScreenshot(uploadUrl: String) {
         if (webView.width == 0 || webView.height == 0) return
+        // PixelCopy reads the actual rendered window surface, so it
+        // correctly captures hardware-composited content - plain
+        // View.draw(Canvas) is a software re-draw of the view hierarchy
+        // that can't see a hardware-accelerated video decode surface, and
+        // comes back solid black for any video slide even though it's
+        // genuinely playing on the real screen. API 24+ only; older devices
+        // fall back to the old draw() method (video will show black there,
+        // same as before - no regression, just not the fix).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
+            PixelCopy.request(window, bitmap, { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    uploadScreenshot(bitmap, uploadUrl)
+                } else {
+                    android.util.Log.w("VenueOSMain", "PixelCopy failed (result=$result), falling back to view draw (video will show black)")
+                    uploadScreenshot(drawWebViewToBitmap(), uploadUrl)
+                }
+            }, Handler(mainLooper))
+        } else {
+            uploadScreenshot(drawWebViewToBitmap(), uploadUrl)
+        }
+    }
+
+    private fun drawWebViewToBitmap(): Bitmap {
         val bitmap = Bitmap.createBitmap(webView.width, webView.height, Bitmap.Config.ARGB_8888)
         webView.draw(Canvas(bitmap))
+        return bitmap
+    }
+
+    private fun uploadScreenshot(bitmap: Bitmap, uploadUrl: String) {
         val baos = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
         val jpeg = baos.toByteArray()
