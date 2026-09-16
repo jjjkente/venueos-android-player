@@ -208,6 +208,28 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
                 handler.proceed()
             }
+
+            // Without this override, Android's default behaviour when the
+            // WebView's renderer process dies (OOM is the usual cause -
+            // more likely on an older/lower-RAM SoC display playing heavy
+            // video content, e.g. the extended 4GB/60min uploads) is to
+            // kill the WHOLE APP - exactly the "screen needs a manual
+            // restart" failure a field visit shouldn't be needed for.
+            // Reloading respawns a fresh renderer automatically, same
+            // self-healing idea as the Pi side's chromium watchdog. Only
+            // called on API 26+ (Android O) - on older devices this
+            // failure mode is unavoidable via the WebView API, no hook
+            // exists to catch it pre-O.
+            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                android.util.Log.e(
+                    "VenueOSMain",
+                    "WebView renderer process gone (didCrash=${detail.didCrash()}, priority=${detail.rendererPriorityAtExit()}) - reloading"
+                )
+                if (view.parent != null) {
+                    view.reload()
+                }
+                return true
+            }
         }
         webView.webChromeClient = WebChromeClient()
     }
