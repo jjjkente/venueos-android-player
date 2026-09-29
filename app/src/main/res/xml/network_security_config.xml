@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Older Android panels (7.0 Philips hospitality TVs, 8.1 Dahua) ship CA
+     stores without ISRG Root X2, which every venueos.jjjk.com.au cert now
+     chains to (leaf <- YE1 <- Root YE <- ISRG Root X2) - the app never got
+     past "Trust anchor for certification path not found", so no pairing code
+     ever appeared. Bundling Let's Encrypt's roots (X1 for RSA chains too)
+     alongside the system store fixes both the agent's HttpURLConnection calls
+     and the WebView, which verifies through this app's default TrustManager. -->
+<network-security-config>
+    <base-config>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="@raw/isrg_root_x1"/>
+            <certificates src="@raw/isrg_root_x2"/>
+        </trust-anchors>
+    </base-config>
+</network-security-config>
