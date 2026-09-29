@@ -7,6 +7,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.REBOOT"/>
+    <!-- Lets AgentService bring signage back in front of live TV (Show
+         Remote's TV/signage switch) - background activity starts are blocked
+         on Android 10+ without it. Granted over ADB, never prompted. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <application
         android:label="VenueOS Player"

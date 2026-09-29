@@ -10,6 +10,8 @@ import androidx.core.app.NotificationCompat
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.HttpURLConnection
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -35,8 +37,18 @@ class AgentService : Service() {
         const val PREF_VENUE_URL = "venue_url"
         const val PREF_SCREEN_ID = "screen_id"
 
+        // Philips hospitality TVs' built-in live TV app - overridable per
+        // command (cmd.value) for other brands' tuner apps.
+        const val DEFAULT_TV_PACKAGE = "org.droidtv.playtv"
+
         // MainActivity sets this to receive events from the service
         var listener: AgentListener? = null
+
+        // True while we've handed the screen to the TV's own live TV app.
+        // Reported back on every poll so the server can re-assert Show
+        // Remote's TV/signage choice after a reboot or app restart (which
+        // always comes back up on signage, resetting this to false).
+        @Volatile var tvMode = false
     }
 
     interface AgentListener {
@@ -239,7 +251,7 @@ class AgentService : Service() {
                 // the panel hops networks or DHCP re-leases without ever rebooting.
                 // WAN IP is deliberately not sent - the signage server captures that
                 // itself from X-Forwarded-For, same as the Pi agent's approach.
-                val qs = "agentVersion=$APP_VERSION&platform=android" +
+                val qs = "agentVersion=$APP_VERSION&platform=android&tvMode=${if (tvMode) 1 else 0}" +
                     "&lanIp=${enc(getLanIp())}&tailscaleIp=${enc(getTailscaleIp())}" +
                     "&macAddress=${enc(getHardwareId())}&osVersion=${enc(Build.VERSION.RELEASE)}"
                 val resp = httpGet("$base/api/screens/$screenId/agent-status?$qs")
@@ -249,7 +261,9 @@ class AgentService : Service() {
             } catch (e: Exception) {
                 Log.w(TAG, "Command poll: ${e.message}")
             }
-            Thread.sleep(10_000)
+            // 3s rather than 10s - Show Remote's TV/signage switch is operated
+            // live during a show, where a 10s lag reads as "didn't work".
+            Thread.sleep(3_000)
         }
     }
 
@@ -292,6 +306,9 @@ class AgentService : Service() {
                 mainHandler.post { listener?.onTakeScreenshot(uploadUrl) }
             }
             "reboot" -> doReboot()
+            "tv-input" -> showLiveTv(cmd.optString("value", "").ifEmpty { DEFAULT_TV_PACKAGE })
+            "signage-input" -> showSignage()
+            "tv-power" -> setTvPower(cmd.optString("value") == "on")
             "check-update" -> Log.i(TAG, "check-update received (Android APK updates via sideload)")
             else -> Log.w(TAG, "Unknown command: $type")
         }
@@ -310,6 +327,51 @@ class AgentService : Service() {
             Runtime.getRuntime().exec(arrayOf("su", "0", "wm", "size", arg)).waitFor()
         } catch (e: Exception) {
             Log.w(TAG, "wm size failed (device may not be rooted): ${e.message}")
+        }
+    }
+
+    private fun showLiveTv(pkg: String) {
+        val intent = packageManager.getLeanbackLaunchIntentForPackage(pkg)
+            ?: packageManager.getLaunchIntentForPackage(pkg)
+        if (intent == null) {
+            Log.w(TAG, "tv-input: $pkg not installed on this device")
+            return
+        }
+        tvMode = true
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try { startActivity(intent) } catch (e: Exception) { Log.e(TAG, "tv-input failed: ${e.message}") }
+    }
+
+    // Launching from a background service needs the "display over other
+    // apps" appop on Android 10+ (granted over ADB at install time -
+    // `appops set com.jjjk.venueos.player SYSTEM_ALERT_WINDOW allow`),
+    // otherwise Android silently drops the start while live TV is in front.
+    private fun showSignage() {
+        tvMode = false
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        try { startActivity(intent) } catch (e: Exception) { Log.e(TAG, "signage-input failed: ${e.message}") }
+    }
+
+    // Philips SICP over the display's own LAN control port, from the device
+    // itself - no Pi/HDMI-CEC needed. Packet: [len, monitorId, group, cmd,
+    // data..., XOR checksum]; 0x18 = power set, 0x01 off (standby) / 0x02 on.
+    // Non-Philips panels just refuse the connection and this logs and moves on.
+    private fun setTvPower(on: Boolean) {
+        val body = byteArrayOf(0x06, 0x01, 0x00, 0x18, (if (on) 0x02 else 0x01).toByte())
+        var cs = 0
+        for (b in body) cs = cs xor b.toInt()
+        try {
+            Socket().use { sock ->
+                sock.connect(InetSocketAddress("127.0.0.1", 5000), 2000)
+                sock.soTimeout = 2000
+                sock.getOutputStream().write(body + cs.toByte())
+                val reply = ByteArray(16)
+                val n = sock.getInputStream().read(reply)
+                Log.i(TAG, "tv-power ${if (on) "on" else "off"} -> ${reply.take(maxOf(n, 0)).joinToString(" ") { "%02x".format(it) }}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "tv-power via SICP failed: ${e.message}")
         }
     }
 
