@@ -66,6 +66,12 @@ object OfflineCache {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
+    // Android 7+ only. Older panels (OGGC's Android 5.0.1 Bar screen) keep
+    // exactly the pre-1.8 behaviour - their ancient WebViews are the least
+    // predictable with intercepted responses, and nothing that worked on
+    // them before should change underneath them.
+    fun isSupported() = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N
+
     fun isOfflineRecently() = System.currentTimeMillis() - lastNetworkFailureAt < OFFLINE_BACKOFF_MS
 
     // ---- WebView interception ----

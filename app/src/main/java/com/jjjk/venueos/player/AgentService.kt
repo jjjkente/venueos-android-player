@@ -36,6 +36,7 @@ class AgentService : Service() {
         const val PREF_PAIRING_CODE = "pairing_code"
         const val PREF_VENUE_URL = "venue_url"
         const val PREF_SCREEN_ID = "screen_id"
+        const val PREF_PIN_APP = "pin_app"
 
         // Philips hospitality TVs' built-in live TV app - overridable per
         // command (cmd.value) for other brands' tuner apps.
@@ -250,6 +251,7 @@ class AgentService : Service() {
     // OfflineCache. Every 2 minutes is plenty: a newly pushed playlist is
     // also fetched on demand by the display the first time it plays.
     private fun startMediaSync(venueUrl: String, screenId: String) {
+        if (!OfflineCache.isSupported()) return
         Thread {
             Thread.sleep(5_000)
             while (true) {

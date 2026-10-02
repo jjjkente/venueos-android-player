@@ -222,7 +222,7 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
             // storage when there's no internet - see OfflineCache.
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 try {
-                    OfflineCache.intercept(applicationContext, request, venueHost)
+                    if (OfflineCache.isSupported()) OfflineCache.intercept(applicationContext, request, venueHost) else null
                 } catch (e: Exception) {
                     android.util.Log.w("VenueOSMain", "Offline cache intercept failed: ${e.message}")
                     null
@@ -313,6 +313,14 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
     // gesture (hold Back + Recents) live underneath, independent of
     // anything this app's code does, on top of the 7-tap escape hatch.
     private fun engageLockTask() {
+        // Opt-in only (v1.8.1). Pinning was meant for the DJ booth tablet,
+        // but touch-capable signage panels (OGGC's freestanding LDM-A and
+        // Bar screen) pinned themselves too, and Android's "App is pinned"
+        // popup then sits over the signage after every reboot. Screens never
+        // pin now; a tablet that needs it gets PREF_PIN_APP set explicitly.
+        if (!getSharedPreferences(AgentService.PREF_NAME, MODE_PRIVATE).getBoolean(AgentService.PREF_PIN_APP, false)) {
+            return
+        }
         // This same APK also runs on Philips commercial displays with no
         // touch input at all - the 7-tap escape hatch above and Android's
         // own hold-Back+Recents unpin gesture both need touch, so pinning a
