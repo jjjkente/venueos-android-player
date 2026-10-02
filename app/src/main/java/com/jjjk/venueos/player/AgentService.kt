@@ -111,6 +111,7 @@ class AgentService : Service() {
         val screenId = prefs.getString(PREF_SCREEN_ID, null)
         if (venueUrl != null && screenId != null) {
             notifyDisplay(venueUrl, screenId)
+            startMediaSync(venueUrl, screenId)
             commandLoop(venueUrl, screenId)
         } else {
             provisionLoop()
@@ -203,6 +204,7 @@ class AgentService : Service() {
                         .putString(PREF_SCREEN_ID, screenId)
                         .apply()
                     notifyDisplay(venueUrl, screenId)
+                    startMediaSync(venueUrl, screenId)
                     commandLoop(venueUrl, screenId)
                     return
                 }
@@ -241,6 +243,24 @@ class AgentService : Service() {
         val displayUrl = "$venueUrl/signage/display?screen=$screenId"
         updateNotification("Running — ${venueUrl.removePrefix("https://")}")
         mainHandler.post { listener?.onLaunchDisplay(displayUrl) }
+    }
+
+    // Keeps every image/video in this screen's current playlist downloaded
+    // to device storage so it keeps playing with no internet - see
+    // OfflineCache. Every 2 minutes is plenty: a newly pushed playlist is
+    // also fetched on demand by the display the first time it plays.
+    private fun startMediaSync(venueUrl: String, screenId: String) {
+        Thread {
+            Thread.sleep(5_000)
+            while (true) {
+                try {
+                    OfflineCache.syncMedia(applicationContext, venueUrl, screenId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Media sync error: ${e.message}")
+                }
+                Thread.sleep(120_000)
+            }
+        }.start()
     }
 
     private fun commandLoop(venueUrl: String, screenId: String) {

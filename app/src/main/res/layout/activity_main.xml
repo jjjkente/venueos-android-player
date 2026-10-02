@@ -107,4 +107,65 @@
 
     </FrameLayout>
 
+    <!-- Shown over the display when it can't load and has nothing saved
+         to fall back on (e.g. first boot with no internet). MainActivity
+         retries underneath every 15s and hides this once it loads. -->
+    <LinearLayout
+        android:id="@+id/offline_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#0e0e11"
+        android:padding="48dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="220dp"
+            android:layout_height="wrap_content"
+            android:src="@drawable/jjjk_logo"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true"
+            android:layout_marginBottom="24dp"/>
+
+        <View
+            android:layout_width="48dp"
+            android:layout_height="2dp"
+            android:background="#2dcbff"
+            android:layout_marginBottom="24dp"/>
+
+        <TextView
+            android:text="Screen Offline"
+            android:textColor="#f2f2f5"
+            android:textSize="34sp"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"/>
+
+        <TextView
+            android:text="No internet connection detected."
+            android:textColor="#c8c8d4"
+            android:textSize="18sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"/>
+
+        <TextView
+            android:text="Please check the network cable or WiFi connection."
+            android:textColor="#c8c8d4"
+            android:textSize="18sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"/>
+
+        <TextView
+            android:text="Content will resume automatically once the connection is back."
+            android:textColor="#9a9aa3"
+            android:textSize="13sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+
 </FrameLayout>

@@ -3,6 +3,7 @@ package com.jjjk.venueos.player
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
@@ -24,6 +25,15 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
     private lateinit var webViewContainer: View
     private lateinit var webView: WebView
     private lateinit var pairingCodeText: TextView
+    private lateinit var offlineView: View
+
+    // Set once the display URL is known - read from WebView's request
+    // threads by shouldInterceptRequest, hence @Volatile.
+    @Volatile private var venueHost: String? = null
+    private var displayUrl: String? = null
+    private var mainFrameFailed = false
+    private val retryHandler = Handler(android.os.Looper.getMainLooper())
+    private val retryDisplay = Runnable { displayUrl?.let { webView.loadUrl(it) } }
 
     // Kiosk escape hatch: 7 taps in the top-left 80dp corner within 3s
     // opens real Android Settings, bypassing immersive/back-button lockdown.
@@ -68,6 +78,7 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
         webViewContainer = findViewById(R.id.webview_container)
         pairingCodeText = findViewById(R.id.pairing_code)
         webView = findViewById(R.id.webview)
+        offlineView = findViewById(R.id.offline_view)
         setupWebView()
 
         // Restore state if already provisioned
@@ -110,6 +121,8 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
     }
 
     override fun onLaunchDisplay(url: String) {
+        displayUrl = url
+        venueHost = Uri.parse(url).host
         webView.loadUrl(url)
         webViewContainer.visibility = View.VISIBLE
         pairingView.visibility = View.GONE
@@ -205,6 +218,39 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
             cacheMode = WebSettings.LOAD_DEFAULT
         }
         webView.webViewClient = object : WebViewClient() {
+            // Serves the display page, playlist and media from on-device
+            // storage when there's no internet - see OfflineCache.
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                try {
+                    OfflineCache.intercept(applicationContext, request, venueHost)
+                } catch (e: Exception) {
+                    android.util.Log.w("VenueOSMain", "Offline cache intercept failed: ${e.message}")
+                    null
+                }
+
+            override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
+                mainFrameFailed = false
+            }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                if (!mainFrameFailed) hideOffline()
+            }
+
+            // Only reached when the display page itself couldn't load AND
+            // there's no saved copy to fall back on (first boot with no
+            // internet). The deprecated overload is used on purpose: on API
+            // 23+ the newer one's default implementation forwards here for
+            // main-frame errors only, and on API 21-22 this is the only one
+            // that exists - so overriding just this covers every device
+            // without subresource failures (a weather widget etc) ever
+            // triggering the offline screen.
+            @Deprecated("Deprecated in Java")
+            override fun onReceivedError(view: WebView, errorCode: Int, description: String?, failingUrl: String?) {
+                android.util.Log.w("VenueOSMain", "Display failed to load ($errorCode $description) - showing offline screen")
+                mainFrameFailed = true
+                showOffline()
+            }
+
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) {
                 handler.proceed()
             }
@@ -232,6 +278,19 @@ class MainActivity : AppCompatActivity(), AgentService.AgentListener {
             }
         }
         webView.webChromeClient = WebChromeClient()
+    }
+
+    // Replaces Android's own "Webpage not available" page with a branded
+    // offline message, and keeps retrying underneath until it loads.
+    private fun showOffline() {
+        offlineView.visibility = View.VISIBLE
+        retryHandler.removeCallbacks(retryDisplay)
+        retryHandler.postDelayed(retryDisplay, 15_000)
+    }
+
+    private fun hideOffline() {
+        offlineView.visibility = View.GONE
+        retryHandler.removeCallbacks(retryDisplay)
     }
 
     private fun hideSystemUI() {
