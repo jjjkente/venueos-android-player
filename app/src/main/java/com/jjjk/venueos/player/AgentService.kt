@@ -134,11 +134,30 @@ class AgentService : Service() {
                 httpPost("$PROVISION_BASE/api/players/$deviceId/info", JSONObject().apply {
                     put("fingerprint", Build.FINGERPRINT)
                     put("buildTags", Build.TAGS)
+                    // Keeps the Players page's version current after an
+                    // update - register only ever sent it once, at pairing
+                    put("appVersion", APP_VERSION)
                 }.toString())
             } catch (e: Exception) {
                 Log.w(TAG, "reportDeviceInfo failed: ${e.message}")
             }
         }.start()
+    }
+
+    // Each ApkUpdater step shows on superadmin's Players page, so whoever
+    // pressed "Check for Update" can see whether it's downloading, done, or
+    // sitting on the screen waiting for someone to tap Install.
+    private fun reportUpdateStatus(status: String, message: String) {
+        Log.i(TAG, "Update: $status - $message")
+        try {
+            httpPost("$PROVISION_BASE/api/players/${getOrCreateDeviceId()}/info", JSONObject().apply {
+                put("appVersion", APP_VERSION)
+                put("updateStatus", status)
+                put("updateMessage", message)
+            }.toString())
+        } catch (e: Exception) {
+            Log.w(TAG, "reportUpdateStatus failed: ${e.message}")
+        }
     }
 
     private fun provisionLoop() {
@@ -331,7 +350,12 @@ class AgentService : Service() {
             "tv-input" -> showLiveTv(cmd.optString("value", "").ifEmpty { DEFAULT_TV_PACKAGE })
             "signage-input" -> showSignage()
             "tv-power" -> setTvPower(cmd.optString("value") == "on")
-            "check-update" -> Log.i(TAG, "check-update received (Android APK updates via sideload)")
+            // Manual only - the dashboard's "Check for Update" button. See ApkUpdater.
+            "check-update" -> Thread {
+                ApkUpdater.checkAndUpdate(applicationContext, getOrCreateDeviceId()) { status, message ->
+                    reportUpdateStatus(status, message)
+                }
+            }.start()
             else -> Log.w(TAG, "Unknown command: $type")
         }
     }
