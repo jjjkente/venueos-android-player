@@ -2,7 +2,7 @@ name: Build VenueOS Player APK
 
 on:
   push:
-    branches: [main, apk-manual-update]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
