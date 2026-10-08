@@ -11,8 +11,8 @@ android {
         applicationId = "com.jjjk.venueos.player"
         minSdk = 21
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.9.0"
+        versionCode = 13
+        versionName = "1.9.1"
     }
 
     buildFeatures {
