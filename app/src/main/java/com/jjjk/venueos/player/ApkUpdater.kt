@@ -29,6 +29,10 @@ import java.net.URL
 object ApkUpdater {
     private const val TAG = "VenueOSUpdate"
     private const val ACTION_INSTALL_RESULT = "com.jjjk.venueos.player.INSTALL_RESULT"
+    // A successful install kills this process before it can say so - the
+    // version we were installing is saved here, and the NEW app reports
+    // "installed" on its first start (see reportFinishedUpdate)
+    private const val PREF_PENDING_UPDATE = "pending_update_version"
 
     @Volatile private var running = false
 
@@ -49,6 +53,8 @@ object ApkUpdater {
             report("downloading", "v$current -> v$latest")
             val apk = download(ctx)
             report("installing", "Installing v$latest")
+            ctx.getSharedPreferences(AgentService.PREF_NAME, Context.MODE_PRIVATE).edit()
+                .putString(PREF_PENDING_UPDATE, latest).apply()
             if (installWithRoot(apk)) {
                 // Normally never reached: pm kills this process as soon as
                 // the new APK is in place. BootReceiver's MY_PACKAGE_REPLACED
@@ -64,6 +70,19 @@ object ApkUpdater {
         } finally {
             running = false
         }
+    }
+
+    // Called once at startup. Returns the status to report if this start is
+    // the first run after one of our updates replaced the app, else null.
+    fun reportFinishedUpdate(ctx: Context): Pair<String, String>? {
+        val prefs = ctx.getSharedPreferences(AgentService.PREF_NAME, Context.MODE_PRIVATE)
+        val pending = prefs.getString(PREF_PENDING_UPDATE, null) ?: return null
+        val current = BuildConfig.VERSION_NAME
+        // Still on the old version = this was a plain restart while the
+        // prompt sat unanswered (or the install failed) - keep waiting
+        if (compareVersions(current, pending) < 0) return null
+        prefs.edit().remove(PREF_PENDING_UPDATE).apply()
+        return "installed" to "Updated to v$current"
     }
 
     private fun fetchLatestVersion(): String {
@@ -170,6 +189,11 @@ object ApkUpdater {
             @Volatile var version: String = "?"
         }
 
+        private fun clearPending(context: Context) {
+            context.getSharedPreferences(AgentService.PREF_NAME, Context.MODE_PRIVATE).edit()
+                .remove(PREF_PENDING_UPDATE).apply()
+        }
+
         override fun onReceive(context: Context, intent: Intent) {
             val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
             val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: ""
@@ -186,8 +210,14 @@ object ApkUpdater {
                     }
                 }
                 PackageInstaller.STATUS_SUCCESS -> onResult?.invoke("installed", "Installed v$version")
-                PackageInstaller.STATUS_FAILURE_ABORTED -> onResult?.invoke("cancelled", "Install was cancelled on the screen")
-                else -> onResult?.invoke("failed", "Install failed ($status): $message")
+                PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                    clearPending(context)
+                    onResult?.invoke("cancelled", "Install was cancelled on the screen")
+                }
+                else -> {
+                    clearPending(context)
+                    onResult?.invoke("failed", "Install failed ($status): $message")
+                }
             }
         }
     }

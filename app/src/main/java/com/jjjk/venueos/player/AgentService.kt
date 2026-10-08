@@ -108,6 +108,9 @@ class AgentService : Service() {
 
     private fun start() {
         reportDeviceInfo()
+        ApkUpdater.reportFinishedUpdate(applicationContext)?.let { (status, message) ->
+            Thread { reportUpdateStatus(status, message) }.start()
+        }
         val venueUrl = prefs.getString(PREF_VENUE_URL, null)
         val screenId = prefs.getString(PREF_SCREEN_ID, null)
         if (venueUrl != null && screenId != null) {
