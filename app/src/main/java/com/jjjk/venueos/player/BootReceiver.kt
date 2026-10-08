@@ -7,7 +7,9 @@ import android.os.Build
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+        // MY_PACKAGE_REPLACED: a remote update (ApkUpdater) just killed and
+        // replaced this app - bring the player straight back up the same way
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             // Starting MainActivity directly from here (a background
             // BroadcastReceiver) hit Android 10+'s background-activity-start
             // restriction on real hardware - BOOT_COMPLETED receivers are
