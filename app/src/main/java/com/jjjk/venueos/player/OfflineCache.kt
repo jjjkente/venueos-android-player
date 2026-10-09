@@ -103,6 +103,7 @@ object OfflineCache {
         val url = uri.toString()
         val body = File(pageDir(ctx), pageKey(url))
         val meta = File(pageDir(ctx), pageKey(url) + ".type")
+        val tzFile = File(pageDir(ctx), pageKey(url) + ".tz")
 
         if (!isOfflineRecently()) {
             try {
@@ -113,6 +114,13 @@ object OfflineCache {
                 try {
                     val code = conn.responseCode
                     val contentType = conn.contentType ?: "application/octet-stream"
+                    // display.html reads these off now-playing: the screen's
+                    // timezone (clock widgets) and the server's clock (synced
+                    // playback). Passed through live; only the timezone is
+                    // kept for offline - a saved server time would be stale.
+                    val passHeaders = mutableMapOf<String, String>()
+                    conn.getHeaderField("X-Screen-Timezone")?.let { passHeaders["X-Screen-Timezone"] = it }
+                    conn.getHeaderField("X-Server-Time")?.let { passHeaders["X-Server-Time"] = it }
                     if (code in 200..299) {
                         val bytes = conn.inputStream.use { it.readBytes() }
                         // now-playing is polled every 2s - only touch flash
@@ -121,7 +129,8 @@ object OfflineCache {
                             writeAtomically(body, bytes)
                             meta.writeText(contentType)
                         }
-                        return response(contentType, code, bytes.inputStream())
+                        passHeaders["X-Screen-Timezone"]?.let { tzFile.writeText(it) }
+                        return response(contentType, code, bytes.inputStream(), passHeaders)
                     }
                     // A 5xx is the server/proxy being down - treat it the same
                     // as no network. Anything else (404 = screen removed etc)
@@ -141,20 +150,21 @@ object OfflineCache {
 
         if (body.exists()) {
             val type = if (meta.exists()) meta.readText() else "text/html"
-            return response(type, 200, FileInputStream(body))
+            val headers = if (tzFile.exists()) mapOf("X-Screen-Timezone" to tzFile.readText()) else emptyMap()
+            return response(type, 200, FileInputStream(body), headers)
         }
         // Nothing saved - let the WebView fail normally so MainActivity's
         // error handler can put up the offline screen.
         return null
     }
 
-    private fun response(contentType: String, code: Int, stream: InputStream): WebResourceResponse {
+    private fun response(contentType: String, code: Int, stream: InputStream, extraHeaders: Map<String, String> = emptyMap()): WebResourceResponse {
         val mime = contentType.substringBefore(';').trim()
         val charset = Regex("charset=([^;]+)", RegexOption.IGNORE_CASE)
             .find(contentType)?.groupValues?.get(1)?.trim() ?: "utf-8"
         val reason = when (code) { 200 -> "OK"; 404 -> "Not Found"; else -> "Status $code" }
         return WebResourceResponse(mime, charset, code, reason,
-            mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*"), stream)
+            mapOf("Cache-Control" to "no-store", "Access-Control-Allow-Origin" to "*") + extraHeaders, stream)
     }
 
     // Video needs byte-range support - the WebView's media player seeks and
